@@ -334,23 +334,23 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 h-14 bg-canvas/95 backdrop-blur-md border-b border-line ${className}`}>
       <div className="h-14 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-sans text-body-ui font-semibold text-ink-strong tracking-tight">
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+          <span className="font-sans text-body-ui font-semibold text-ink-strong tracking-tight shrink-0">
             Marginalia
           </span>
           {(breadcrumbRoot || currentPage) && (
             <>
-              <span className="font-micro text-ink-faint">/</span>
+              <span className="font-micro text-ink-faint shrink-0">/</span>
               {breadcrumbRoot && (
                 <>
-                  <span className="font-sans text-body-ui font-medium text-ink-strong">
+                  <span className="font-sans text-body-ui font-medium text-ink-strong shrink-0">
                     {breadcrumbRoot}
                   </span>
-                  {currentPage && <span className="font-micro text-ink-faint">/</span>}
+                  {currentPage && <span className="font-micro text-ink-faint shrink-0">/</span>}
                 </>
               )}
               {currentPage && (
-                <span className="font-sans text-body-ui font-medium text-ink-strong">
+                <span className="font-sans text-body-ui font-medium text-ink-strong truncate max-w-[140px] sm:max-w-none">
                   {currentPage}
                 </span>
               )}
