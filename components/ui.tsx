@@ -180,7 +180,7 @@ export const DocumentRow: React.FC<DocumentRowProps> = ({
         : {})}
     >
       <div className="flex-1 min-w-0">
-        <h3 className={`font-serif text-headline ${titleColor} truncate`}>{title}</h3>
+        <h3 className={`font-serif text-headline ${titleColor}`}>{title}</h3>
         <div className="font-sans text-label text-ink-muted mt-1.5 flex flex-wrap gap-x-1.5 gap-y-0.5">
           <span>{author}</span>
           <span>·</span>
