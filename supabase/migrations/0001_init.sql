@@ -26,7 +26,7 @@ CREATE TABLE chunks (
   page_number int NOT NULL,
   chunk_index int NOT NULL,
   content text NOT NULL,
-  embedding vector(768) NOT NULL,
+  embedding vector(3072) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

@@ -1,8 +1,7 @@
-import { GoogleGenerativeAI, TaskType } from '@google/generative-ai';
 import type { Chunk } from './chunk';
 
 export interface EmbeddedChunk extends Chunk {
-  embedding: number[];  // 768 floats from text-embedding-004
+  embedding: number[];  // 768 floats from gemini-embedding-001
 }
 
 export interface EmbedOptions {
@@ -12,7 +11,14 @@ export interface EmbedOptions {
 }
 
 /**
- * Embed chunks using Gemini text-embedding-004.
+ * Embed chunks using Gemini gemini-embedding-001 via direct REST API.
+ *
+ * Why direct REST, not the SDK: the @google/generative-ai SDK silently
+ * strips the outputDimensionality field from the request body, so the
+ * model always returns its default 3072 dimensions. Our schema uses
+ * vector(768) and the ivfflat index requires ≤2000 dimensions, so we
+ * must actually get 768 back. The REST API honors outputDimensionality
+ * in the request body; the SDK does not.
  *
  * Why sequential, not parallel: the free tier is ~5-10 RPM for embeddings.
  * Firing all requests in parallel hits 429 immediately. Sequential with a
@@ -21,12 +27,16 @@ export interface EmbedOptions {
  *
  * Why single calls, not batchEmbedContents: free-tier batch embedding is
  * unreliable. Reports confirm RPM counts per text, not per HTTP call, so
- * batching gives zero throughput benefit while adding 429 risk. Single
- * calls are predictable.
+ * batching gives zero throughput benefit while adding 429 risk.
  *
  * Why RETRIEVAL_DOCUMENT: this is the task type for chunks that will be
  * retrieved later. The query (in D4) will use RETRIEVAL_QUERY. Matching
  * task types improves retrieval quality.
+ *
+ * Why L2 normalization: gemini-embedding-001 auto-normalizes only its
+ * default 3072-dim output. For 768-dim output, vectors are unnormalized;
+ * we normalize them so cosine similarity (via the <=> operator in the
+ * match_chunks function) works correctly.
  *
  * Retry strategy: on 429, exponential backoff (2s, 4s, 8s), max 3 retries.
  * After max retries, throw with the chunk index so the caller can report
@@ -46,9 +56,6 @@ export async function embedChunks(
     );
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
-
   const results: EmbeddedChunk[] = [];
 
   for (let i = 0; i < chunks.length; i++) {
@@ -57,20 +64,41 @@ export async function embedChunks(
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const response = await model.embedContent({
-          content: { role: 'user', parts: [{ text: chunk.content }] },
-          taskType: TaskType.RETRIEVAL_DOCUMENT,
-          outputDimensionality: 768,
-        });
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'models/gemini-embedding-001',
+              content: { parts: [{ text: chunk.content }] },
+              taskType: 'RETRIEVAL_DOCUMENT',
+              outputDimensionality: 768,
+            }),
+          }
+        );
 
-        const values = response.embedding.values;
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Gemini API error ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        const values: number[] | undefined = data.embedding?.values;
+
         if (!values || values.length !== 768) {
           throw new Error(
             `Expected 768-dim embedding, got ${values?.length ?? 0}`
           );
         }
 
-        results.push({ ...chunk, embedding: values });
+        // L2 normalize (required for non-default dimensions from gemini-embedding-001)
+        const norm = Math.sqrt(
+          values.reduce((sum, v) => sum + v * v, 0)
+        );
+        const normalized = values.map((v) => v / norm);
+
+        results.push({ ...chunk, embedding: normalized });
         lastError = null;
         break;
       } catch (err) {
