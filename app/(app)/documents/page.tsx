@@ -1,121 +1,133 @@
 'use client';
 
-import React from 'react'
-import { TopAppBar } from '@/components/ui'
-import { PageHeaderBand } from '@/components/ui'
-import { SectionLabel } from '@/components/ui'
-import { DocumentRow } from '@/components/ui'
-import { EmptyState } from '@/components/ui'
-import { PrimaryButton } from '@/components/ui'
-import { Plus } from 'lucide-react'
-import { SignOutButton } from '@/components/sign-out-button'
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import {
+  TopAppBar,
+  PageHeaderBand,
+  SectionLabel,
+  DocumentRow,
+  EmptyState,
+  PrimaryButton,
+} from '@/components/ui';
+import { SignOutButton } from '@/components/sign-out-button';
+import { Plus } from 'lucide-react';
 
-export default function DocumentsListPage() {
+interface Document {
+  id: string;
+  title: string;
+  author: string;
+  page_count: number;
+  status: 'processing' | 'ready' | 'failed';
+  created_at: string;
+}
+
+export default function DocumentsPage() {
+  const router = useRouter();
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDocuments = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error: fetchError } = await supabase
+      .from('documents')
+      .select('id, title, author, page_count, status, created_at')
+      .order('created_at', { ascending: false });
+
+    if (fetchError) {
+      setError(fetchError.message);
+      setLoading(false);
+      return;
+    }
+
+    setDocuments(data as Document[]);
+    setLoading(false);
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    fetchDocuments();
+    // Refetch on window focus to pick up status changes from uploads
+    const handleFocus = () => {
+      fetchDocuments();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchDocuments]);
+
   return (
     <div className="min-h-screen bg-canvas">
-      {/* SECTION 1 ' Top app bar */}
       <TopAppBar
         user={{ name: 'Maya Okonkwo', initials: 'MO' }}
       />
 
-      {/* SECTION 2 ' Page header band */}
-      <div className="pt-10 pb-8 border-b border-line max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mt-4">
-          <div className="flex-1">
-            <h1 className="font-serif text-display text-ink-strong">Documents</h1>
-            <p className="font-sans text-body-ui text-ink-muted mt-2 max-w-2xl">
-              Your uploaded PDFs. Open one to ask questions.
-            </p>
-          </div>
-          <div className="md:mt-0 flex items-center gap-2">
-            <PrimaryButton onClick={() => {}} className="flex items-center gap-2">
-              <Plus className='w-4 h-4' />
-              Upload PDF
-            </PrimaryButton>
-            <SignOutButton />
-          </div>
-        </div>
-      </div>
+      <div className="h-14" aria-hidden="true" />
 
-      {/* SECTION 3 ' Populated documents list */}
-      <section className='max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
+      <PageHeaderBand
+        backLink={{ label: 'Back to upload', href: '/upload' }}
+        title="Documents"
+        subtitle="Your uploaded PDFs. Open one to ask questions and get cited answers."
+      />
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <SectionLabel>All documents</SectionLabel>
-        <div className='space-y-3.5'>
-          <DocumentRow
-            title='Master Services Agreement — Northwind / Halcyon Systems'
-            author='Halcyon Legal'
-            pages={24}
-            status='ready'
-            href='#'
-          />
-          <DocumentRow
-            title='Adaptive Thermal Regulation in Low-Power Sensor Networks'
-            author='R. Ferreira et al.'
-            pages={18}
-            status='ready'
-            href='#'
-          />
-          <DocumentRow
-            title='Field Reliability Report: Model XR-200, Q3'
-            author='Northwind Engineering'
-            pages={42}
-            status='processing'
-          />
-          <DocumentRow
-            title='Q4 Vendor Consolidation Proposal'
-            author='J. Park'
-            pages={9}
-            status='failed'
-            onReUpload={() => {}}
-          />
-          <DocumentRow
-            title='Chapter 6 — Distributed Consensus'
-            author='K. Adeyemi'
-            pages={31}
-            status='ready'
-            href='#'
-          />
-        </div>
-      </section>
 
-      {/* SECTION 4 ' Labeled alternate: Empty state */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="border-t border-line w-full my-14" />
-        <p className='font-sans text-micro uppercase tracking-wider text-ink-faint font-medium mb-3'>
-          ALTERNATE: EMPTY STATE
-        </p>
-        <EmptyState
-          title='No documents yet.'
-          body="Upload a PDF and we'll index it so you can ask questions and get cited answers."
-          ctaLabel='Upload your first PDF'
-          onCta={() => {}}
-          steps={['Upload a PDF', 'We extract and index it', 'Ask questions, get citations']}
-        />
-      </div>
+        <div className="space-y-3.5">
+          {loading && (
+            <div className="animate-pulse rounded-md h-64 w-full mb-4">
+              Skeleton
+            </div>
+          )}
 
-      {/* SECTION 5 ' Labeled alternate: Upload-in-progress */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="border-t border-line w-full my-14" />
-        <p className='font-sans text-micro uppercase tracking-wider text-ink-faint font-medium mb-3'>
-          ALTERNATE: UPLOAD-IN-PROGRESS (TOP OF LIST)
-        </p>
-        <div className='space-y-3.5'>
-          <DocumentRow
-            title='Q4 Budget Review FY26.pdf'
-            author='Uploading now'
-            pages={0}
-            status='processing'
-          />
-          <DocumentRow
-            title='Master Services Agreement \u2014 Northwind / Halcyon Systems'
-            author='Halcyon Legal'
-            pages={24}
-            status='ready'
-            href='#'
-          />
+          {loading && !error && (
+            <EmptyState
+              title="Loading documents…"
+              body="We're fetching your documents. This should only take a moment."
+              ctaLabel="Refresh"
+              onCta={() => fetchDocuments()}
+              steps={[]}
+            />
+          )}
+
+          {error && (
+            <div className="rounded-md bg-status-failed p-4 mb-4">
+              <p className="text-status-failed">{error}</p>
+            </div>
+          )}
+
+          {documents.length === 0 && !loading && !error && (
+            <EmptyState
+              title="No documents yet."
+              body="Upload a PDF and we'll index it so you can ask questions and get cited answers."
+              ctaLabel="Upload your first PDF"
+              onCta={() => router.push('/upload')}
+              steps={['Upload a PDF', 'We extract and index it', 'Ask questions, get citations']}
+            />
+          )}
+
+          {!loading && !error && documents.length > 0 && (
+            <div className="space-y-3.5">
+              {documents.map((doc) => (
+                <DocumentRow
+                  key={doc.id}
+                  title={doc.title}
+                  author={doc.author || 'Unknown'}
+                  pages={doc.page_count}
+                  status={doc.status}
+                  href={doc.status === 'ready' ? `/documents/${doc.id}` : undefined}
+                  onReUpload={
+                    doc.status === 'failed'
+                      ? () => router.push('/upload')
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
-  )
+  );
 }
-
